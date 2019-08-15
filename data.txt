@@ -1,0 +1,15 @@
+01_wheat_50
+02_rye_80
+03_oats_75
+04_corn_90
+05_barley_100
+06_rice_120
+07_noodles_10
+08_butter_200
+09_cake_500
+10_choco chips_25
+11_Huggies_250
+12_Coca Cola_100
+13_flour_150
+14_muesli_270
+15_popcorn_50

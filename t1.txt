@@ -1,0 +1,488 @@
+#include <stdio.h>
+//For using listen after the bind section
+#include <sys/types.h>        
+#include <sys/socket.h>
+// Listen can be used by including the above 2 files
+#include <arpa/inet.h>    //close  
+#include <netinet/in.h>  
+#include <sys/time.h> //for macros
+#include <string.h>   //strlen  
+#include <stdlib.h>  
+#include <errno.h>  
+#include <unistd.h>  
+#include <signal.h>
+//The below function converts any char *
+//into a string
+//Required to convert port number 
+//from string to integer
+int StringToNumber(char * s) {
+    int length = strlen(s);
+    int i;
+    int num = 0;
+    for(i = 0 ; i < length ; i++) {
+        num *= 10;
+        num += s[i] - '0';
+    }
+    return num;
+}
+const int N = 1024;
+const int MAX = 2;
+const int SIZE = 123;
+int client_socket[123];
+int bill[123];
+int opt = 1;
+int master_sockfd;
+int addrlen;
+int port;
+int i;
+int new_socket;
+void Handler(int sig) {
+	signal(SIGINT , Handler);
+	int i;
+	for(i = 0 ; i < MAX ; i++) {
+		if(client_socket[i] != 0) {
+			printf("Socket number - %d is being closed." , client_socket[i]);
+			close(client_socket[i]);
+			bill[i] = 0;
+		}
+	}
+	close(master_sockfd);
+}
+//The below function converts any 
+//positive integer into a string
+char * IntegerToString(int b) {
+	static char ans[123];
+	bzero(ans , sizeof(ans));
+	int i = 0;
+	int a = b;
+	while(a != 0) {
+		int temp = a % 10;
+		ans[i] = '0' + temp;
+		a = a / 10;
+		i++;
+	}
+	static char ans2[123];
+	bzero(ans2 , sizeof(ans2));
+	int len = strlen(ans);
+	int index = 0;
+	for(i = len - 1 ; i >= 0 ; i--) {
+		ans2[index] = ans[i];
+		index++;
+	}
+	return ans2;
+}
+// Driver function
+int main(int argc , char * argv[]) { 
+	struct sockaddr_in serveraddr; 
+    if(argc > 2) {
+        printf("Number of arguments entered by you exceeds the max limit\n");
+        printf("Server is exiting now because of your mistake\n");
+        exit(0);
+    }
+    if(argc < 2) {
+        printf("Number of arguments entered by you is less than what should have been provided\n");
+        printf("Server is exiting now because of your mistake\n");
+        exit(0);   
+    }
+    signal(SIGINT , Handler);
+    char * portnumber = argv[1];
+    port = StringToNumber(portnumber);
+    //Socket Creation Function
+    fd_set readfds;
+    for(i = 0 ; i < MAX ; i++) {
+        client_socket[i] = 0;
+    }
+    master_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    //SOCK_STREAM for TCP connection and SOCK_DGRAM for UPD connection 
+    if (master_sockfd == 0) { 
+        printf("Socket creation has failed\n"); 
+        exit(0); 
+    } 
+    else {
+        printf("Socket has been successfully created\n"); 
+    }
+    //set master socket to allow multiple connections ,  
+    //this is just a good habit, it will work without this  
+    if(setsockopt(master_sockfd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt,  
+          sizeof(opt)) < 0 ) {   
+        perror("setsockopt");   
+        exit(EXIT_FAILURE);   
+    }  
+    // assign IP, PORT 
+    serveraddr.sin_family = AF_INET; 
+    serveraddr.sin_addr.s_addr = INADDR_ANY;
+    serveraddr.sin_port = htons(port); 
+    // Binding newly created socket to given IP and verification 
+    if ((bind(master_sockfd, (struct sockaddr*)&serveraddr, sizeof(serveraddr))) != 0) { 
+        printf("Socket bind failed.\n");
+    }
+
+    if (listen(master_sockfd, MAX) < 0) {   
+        perror("listen");   
+        exit(EXIT_FAILURE);   
+    }   
+    //accept the incoming connection  
+    addrlen = sizeof(serveraddr);   
+    puts("Waiting for connections ...");        
+    while(1) {   
+        //clear the socket set  
+        int sd;
+        int max_sd;
+        FD_ZERO(&readfds);        
+        //add master socket to set  
+        FD_SET(master_sockfd, &readfds);   
+        max_sd = master_sockfd;     
+        //add child sockets to set  
+        for (i = 0 ; i < MAX ; i++) {
+            //socket descriptor  
+            sd = client_socket[i];                    
+            //if valid socket descriptor then add to read list  
+            if(sd > 0)   
+                FD_SET( sd , &readfds);
+            //highest file descriptor number, need it for the select function  
+            if(sd > max_sd)   
+                max_sd = sd;   
+        }        
+        //wait for an activity on one of the sockets , timeout is NULL ,  
+        //so wait indefinitely  
+        int activity = select(max_sd + 1 , &readfds , NULL , NULL , NULL);   
+        if ((activity < 0) && (errno!=EINTR)) {   
+            printf("select error");   
+        }
+        //If something happened on the master socket ,  
+        //then its an incoming connection 
+        char buffer[N]; 
+        if (FD_ISSET(master_sockfd, &readfds)) {
+        	        	
+            if ((new_socket = accept(master_sockfd , (struct sockaddr *)&serveraddr , (socklen_t*)&addrlen))<0) {   
+                perror("accept");   
+                exit(EXIT_FAILURE);   
+            }                
+            //inform user of socket number - used in send and receive commands  
+            /*printf("New connection , socket fd is %d , ip is : %s , port : %d  
+                  \n" , new_socket , inet_ntoa(serveraddr.sin_addr) , ntohs 
+                  (serveraddr.sin_port));   
+           */
+            //send new connection greeting message  
+            bzero(buffer , sizeof(buffer));
+            read(new_socket , buffer , N);
+            char type = buffer[0];
+            char UPC[64];
+    		char NAME[N];
+    		char PRICE[10];
+    		char upc_code[64];
+           	char number[10];
+            if(type == '0') {
+            	printf("Rakshit1\n");
+            	int index = 0;
+            	bzero(upc_code , sizeof(upc_code));
+            	bzero(number , sizeof(number));
+            	for(i = 2 ; i < strlen(buffer) ; i++) {
+            		if(buffer[i] == '_') break;
+            		upc_code[index] = buffer[i];
+            		index++;
+            	}
+            	int upc_end = i;
+            	index = 0;
+            	for(i = upc_end + 1 ; i < strlen(buffer) ; i++) {
+            		if(buffer[i] == '\0') break;
+            		number[index] = buffer[i];
+            		index++;
+            	}
+            	int quantity_is_number_or_not = 1;
+            	for(i = 0 ; i < strlen(number) ; i++) {
+            		if(number[i] < '0' || number[i] > '9') {
+            			quantity_is_number_or_not = 0;
+            		}
+            	}
+            	bzero(buffer , sizeof(buffer));
+            	if(quantity_is_number_or_not == 0) {
+            		char str[] = "Response - 1 Number of items should be a definite positive integer\n";
+            		for(i = 0 ; i < strlen(str) ; i++) {
+            			buffer[i] = str[i];
+            		}
+            	}
+            	else {
+            		FILE * filepointer;
+            		filepointer = fopen("data.txt" , "r");
+            		char buff[N];
+            		int upc_code_found = 0;
+            		while(fgets(buff , sizeof(buff) , filepointer) != NULL) {
+				    	buff[strlen(buff) - 1] = '\0';
+			    		char upc[64];
+			    		char name[N];
+			    		char price[10];
+			    		bzero(upc , sizeof(upc));
+			    		bzero(name , sizeof(name));
+			    		bzero(price , sizeof(price));
+			    		index = 0;
+			    		for(i = 0 ; i < strlen(buff) ; i++) {
+			    			if(buff[index] == '_') break;
+			    			upc[i] = buff[index];
+			    			index++;
+			    		}
+			    		index++;
+			    		int jj = index;
+			    		for(i = jj ; i < strlen(buff) ; i++) {
+			    			if(buff[index] == '_') break;
+			    			name[i - jj] = buff[index];
+			    			index++;
+			    		}
+			    		index++;
+			    		jj = index;
+			    		for(i = jj ; i < strlen(buff) ; i++) {
+			    			if(buff[index] == '\0') {
+			    				break;
+			    			}
+			    			price[i - jj] = buff[index];
+			    			index++;
+			    		}
+			    		if(strcmp(upc_code , upc) == 0) {
+			    			upc_code_found = 1;
+			    			bzero(NAME , sizeof(NAME));
+			    			bzero(UPC , sizeof(UPC));
+			    			bzero(PRICE , sizeof(PRICE));
+			    			for(i = 0 ; i < strlen(name) ; i++) {
+			    				NAME[i] = name[i];
+			    			}
+			    			for(i = 0 ; i < strlen(price) ; i++) {
+			    				PRICE[i] = price[i];
+			    			}
+			    			for(i = 0 ; i < strlen(upc) ; i++) {
+			    				UPC[i] = upc[i];
+			    			}
+			    			break;
+			    		}
+				    }
+				    if(upc_code_found == 0) {
+				    	char str[] = "Response - 1 UPC not found in database\n";
+	            		for(i = 0 ; i < strlen(str) ; i++) {
+	            			buffer[i] = str[i];
+	            		}
+				    }
+				    else {
+				    	/* Do it from here and write the case when there is no problem now 
+				    	*/
+				    	char str[] = "Response - 0 Price of item is ";
+				    	int j = strlen(str);
+				    	for(i = 0 ; i < strlen(PRICE) ; i++) {
+				    		str[j] = PRICE[i];
+				    		j++;
+				    	}
+				    	char str2[] = " and Name is ";
+				    	j = strlen(str);
+				    	for(i = 0 ; i < strlen(str2) ; i++) {
+				    		str[j] = str2[i];
+				    		j++;
+				    	}
+				    	j = strlen(str);
+				    	for(i = 0 ; i < strlen(NAME) ; i++) {
+				    		str[j] = NAME[i];
+				    		j++;
+				    	}
+				    	for(i = 0 ; i < strlen(str) ; i++) {
+				    		buffer[i] = str[i];
+				    	}
+				    }
+            		fclose(filepointer);
+            	}
+	            write(new_socket , buffer , strlen(buffer));            
+	            //add new socket to array of sockets  
+	            for (i = 0; i < MAX; i++) {
+	                //if position is empty  
+	                if(client_socket[i] == 0) {   
+	                    client_socket[i] = new_socket;   
+	                    int price_of_item = atoi(PRICE);
+	                    int quantity = atoi(number);
+	                    bill[i] += price_of_item * quantity;
+	                   // printf("%d %d\n" ,price_of_item , bill[i]);
+	                    break;   
+	                }   
+	            }  
+	        } // end of type - 0
+	        else if(type == '1') {
+	        	char str[] = "Response - 0 0";
+	        	for(i = 0 ; i < strlen(str) ; i++) {
+	        		buffer[i] = str[i];
+	        	}
+	        	write(new_socket , buffer , strlen(buffer));
+	        }
+	        puts("Response sent to client successfully");
+	    }   
+	    int id;
+        //else its some IO operation on some other socket 
+        for (id = 0; id < MAX; id++) {   
+            sd = client_socket[id];   
+                 
+            if (FD_ISSET(sd , &readfds)) {   
+                //Check if it was for closing , and also read the  
+                //incoming message  
+                bzero(buffer , sizeof(buffer));
+                int valread = read(sd , buffer, 1024);
+                if (valread == 0) {   
+                    //Somebody disconnected , get his details and print  
+                    getpeername(sd , (struct sockaddr*)&serveraddr , (socklen_t*)&addrlen);   
+                    printf("Host disconnected , ip %s , port %d \n" ,  
+                          inet_ntoa(serveraddr.sin_addr) , ntohs(serveraddr.sin_port));   
+                         
+                    //Close the socket and mark as 0 in list for reuse  
+                    close(sd);   
+                    client_socket[id] = 0;   
+                    bill[id] = 0;
+                }                     
+                //Echo back the message that came in  
+                else {   
+                    //set the string terminating NULL byte on the end  
+                    //of the data read  
+                    printf("Rakshit2\n");
+                    buffer[valread] = '\0';
+                    char type = buffer[0];
+		            char UPC[64];
+		    		char NAME[N];
+		    		char PRICE[10];
+		    		char upc_code[64];
+		           	char number[10];
+		            if(type == '0') {
+		            	int index = 0;
+		            	bzero(upc_code , sizeof(upc_code));
+		            	bzero(number , sizeof(number));
+		            	for(i = 2 ; i < strlen(buffer) ; i++) {
+		            		if(buffer[i] == '_') break;
+		            		upc_code[index] = buffer[i];
+		            		index++;
+		            	}
+		            	int upc_end = i;
+		            	index = 0;
+		            	for(i = upc_end + 1 ; i < strlen(buffer) ; i++) {
+		            		if(buffer[i] == '\0') break;
+		            		number[index] = buffer[i];
+		            		index++;
+		            	}
+		            	int quantity_is_number_or_not = 1;
+		            	for(i = 0 ; i < strlen(number) ; i++) {
+		            		if(number[i] < '0' || number[i] > '9') {
+		            			quantity_is_number_or_not = 0;
+		            		}
+		            	}
+		            	bzero(buffer , sizeof(buffer));
+		            	if(quantity_is_number_or_not == 0) {
+		            		char str[] = "Response - 1 Number of items should be a definite positive integer\n";
+		            		for(i = 0 ; i < strlen(str) ; i++) {
+		            			buffer[i] = str[i];
+		            		}
+		            	}
+		            	else {
+		            		FILE * filepointer;
+		            		filepointer = fopen("data.txt" , "r");
+		            		char buff[N];
+		            		int upc_code_found = 0;
+		            		while(fgets(buff , sizeof(buff) , filepointer) != NULL) {
+						    	buff[strlen(buff) - 1] = '\0';
+					    		char upc[64];
+					    		char name[N];
+					    		char price[10];
+					    		bzero(upc , sizeof(upc));
+					    		bzero(name , sizeof(name));
+					    		bzero(price , sizeof(price));
+					    		index = 0;
+					    		for(i = 0 ; i < strlen(buff) ; i++) {
+					    			if(buff[index] == '_') break;
+					    			upc[i] = buff[index];
+					    			index++;
+					    		}
+					    		index++;
+					    		int jj = index;
+					    		for(i = jj ; i < strlen(buff) ; i++) {
+					    			if(buff[index] == '_') break;
+					    			name[i - jj] = buff[index];
+					    			index++;
+					    		}
+					    		index++;
+					    		jj = index;
+					    		for(i = jj ; i < strlen(buff) ; i++) {
+					    			if(buff[index] == '\0') {
+					    				break;
+					    			}
+					    			price[i - jj] = buff[index];
+					    			index++;
+					    		}
+					    		if(strcmp(upc_code , upc) == 0) {
+					    			upc_code_found = 1;
+					    			bzero(NAME , sizeof(NAME));
+					    			bzero(UPC , sizeof(UPC));
+					    			bzero(PRICE , sizeof(PRICE));
+					    			for(i = 0 ; i < strlen(name) ; i++) {
+					    				NAME[i] = name[i];
+					    			}
+					    			for(i = 0 ; i < strlen(price) ; i++) {
+					    				PRICE[i] = price[i];
+					    			}
+					    			for(i = 0 ; i < strlen(upc) ; i++) {
+					    				UPC[i] = upc[i];
+					    			}
+					    			break;
+					    		}
+						    }
+						    if(upc_code_found == 0) {
+						    	char str[] = "Response - 1 UPC not found in database\n";
+			            		for(i = 0 ; i < strlen(str) ; i++) {
+			            			buffer[i] = str[i];
+			            		}
+						    }
+						    else {
+						    	/* Do it from here and write the case when there is no problem now 
+						    	*/
+						    	char str[] = "Response - 0 Price of item is ";
+						    	int j = strlen(str);
+						    	for(i = 0 ; i < strlen(PRICE) ; i++) {
+						    		str[j] = PRICE[i];
+						    		j++;
+						    	}
+						    	char str2[] = " and Name is ";
+						    	j = strlen(str);
+						    	for(i = 0 ; i < strlen(str2) ; i++) {
+						    		str[j] = str2[i];
+						    		j++;
+						    	}
+						    	j = strlen(str);
+						    	for(i = 0 ; i < strlen(NAME) ; i++) {
+						    		str[j] = NAME[i];
+						    		j++;
+						    	}
+						    	for(i = 0 ; i < strlen(str) ; i++) {
+						    		buffer[i] = str[i];
+						    	}
+						    	int price_of_item = atoi(PRICE);
+				                int quantity = atoi(number);
+				                bill[id] = bill[id] + price_of_item * quantity; 
+				                printf("Bill is %d\n" , bill[id]);
+						    }
+		            		fclose(filepointer);
+		            	}
+		            	write(new_socket , buffer , strlen(buffer));            
+			             
+			        } // end of type - 0
+			        else if(type == '1') {
+			        	printf("Rakshit\n");
+			        	char str[] = "Response - 0 Bill - ";
+			        	bzero(buffer , sizeof(buffer));
+			        	for(i = 0 ; i < strlen(str) ; i++) {
+			        		buffer[i] = str[i];
+			        	}
+			        	int buffer_end = strlen(buffer);
+			        	char * str2 = IntegerToString(bill[id]);
+			        	for(i = 0 ; i < strlen(str2) ; i++) {
+			        		buffer[buffer_end] = str2[i];
+			        		buffer_end++;
+			        	}
+			        	write(new_socket , buffer , strlen(buffer));/*
+			        	if(send(new_socket, buffer, strlen(buffer), 0) != strlen(buffer)){   
+			                perror("send");   
+			            }*/
+			        }
+			        puts("Response sent to client successfully");   
+                }   
+            }   
+        }   
+    }   
+}
